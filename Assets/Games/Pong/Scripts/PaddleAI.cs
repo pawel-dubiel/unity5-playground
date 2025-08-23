@@ -14,10 +14,24 @@ public class PaddleAI : MonoBehaviour
     [Header("Behavior")]
     public float moveSpeed = 5.0f; // units per second
     public float anticipate = 0.1f; // seconds to look ahead along ball velocity
-    public float deadZone = 0.1f;  // do not move if within this distance
+    public float deadZone = 0.2f;  // do not move if within this distance
     public float reactionThreshold = 0.3f; // only react if ball is moving towards paddle
-    public float smoothingFactor = 0.1f; // smooth out AI movements
+    public float smoothingFactor = 0.05f; // smooth out AI movements
     public bool onlyTrackWhenBallApproaching = true; // smarter AI behavior
+    
+    [Header("Horizontal Movement")]
+    public bool enableHorizontalMovement = true; // enable AI horizontal movement
+    public float horizontalMoveSpeed = 3.0f; // speed for horizontal movement
+    public float minDistanceFromNet = 2.0f; // minimum distance from net (center)
+    public float maxDistanceFromNet = 8.0f; // maximum distance from net (center)
+    public float aggressiveThreshold = 0.5f; // when ball speed is below this, move closer
+    public float defensiveThreshold = 8.0f; // when ball speed is above this, move farther back
+    
+    [Header("Spin Compensation")]
+    public bool enableSpinCompensation = true; // enable spin-aware prediction
+    public float spinLookaheadSteps = 5; // number of physics steps to simulate for spin
+    public float spinSimulationTimeStep = 0.02f; // time step for spin simulation
+    public bool showDebugPrediction = false; // show prediction gizmos in editor
 
     private Transform _ball;
     private Transform _paddle;
@@ -45,9 +59,54 @@ public class PaddleAI : MonoBehaviour
     }
 
     private float _targetY;
+    private float _targetX; // for horizontal movement
     private bool _hasTargets;
     private Vector2 _lastBallPos;
     private float _smoothedTargetY; // for smoother AI movement
+    private float _smoothedTargetX; // for smoother horizontal movement
+
+    private bool _initialized;
+
+    private float PredictPositionWithSpin(Vector2 currentPos, Vector2 currentVel, Rigidbody2D ballRigidbody)
+    {
+        Vector2 simulatedPos = currentPos;
+        Vector2 simulatedVel = currentVel;
+        float angularVelocity = ballRigidbody != null ? ballRigidbody.angularVelocity : 0f;
+        
+        // Simulate forward in time to predict where ball will be
+        float totalSimulationTime = anticipate;
+        int steps = Mathf.Max(1, Mathf.FloorToInt(totalSimulationTime / spinSimulationTimeStep));
+        
+        for (int i = 0; i < steps; i++)
+        {
+            // Apply Magnus effect if there's significant spin
+            float speed = simulatedVel.magnitude;
+            float omega = angularVelocity * Mathf.Deg2Rad; // rad/s
+            
+            if (speed > 0.01f && Mathf.Abs(omega) > 0.01f)
+            {
+                // Magnus force: perpendicular to velocity, proportional to spin and speed
+                Vector2 perp = new Vector2(-simulatedVel.y, simulatedVel.x).normalized;
+                float sign = Mathf.Sign(omega);
+                float magnusCoefficient = 0.15f; // Match Ball2D.magnusCoefficient
+                Vector2 magnusForce = perp * sign * magnusCoefficient * Mathf.Abs(omega) * speed;
+                
+                // Apply force to change velocity
+                simulatedVel += magnusForce * spinSimulationTimeStep;
+            }
+            
+            // Update position
+            simulatedPos += simulatedVel * spinSimulationTimeStep;
+            
+            // Stop if we've reached the paddle's x position
+            if (_paddle != null && simulatedPos.x >= _paddle.position.x)
+            {
+                break;
+            }
+        }
+        
+        return simulatedPos.y;
+    }
 
     private void LateUpdate()
     {
