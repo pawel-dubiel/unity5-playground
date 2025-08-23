@@ -39,7 +39,10 @@ public class ModeSelect : MonoBehaviour
 
     private void ApplySelection()
     {
-        if (_ai == null) _ai = FindObjectOfType<PaddleAI>() ?? CreateAI();
+        if (_ai == null)
+        {
+            _ai = CreateAI();
+        }
         if (_ai != null) _ai.enabled = SinglePlayer; // enable AI for single player
 
         // Add/remove human controllers only in 2D physics setup (when Rigidbody2D exists)
