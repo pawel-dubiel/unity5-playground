@@ -12,7 +12,7 @@ public class ModeSelect : MonoBehaviour
 
     // Created by PongBootstrap
 
-    private PaddleAI _ai;
+    [SerializeField] private PaddleAI _ai;
     private bool _applied;
 
     private void Update()
