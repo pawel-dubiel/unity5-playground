@@ -127,46 +127,164 @@ public class PaddleAI : MonoBehaviour
         
         if (shouldReact)
         {
-            // Only predict when ball is approaching or close enough
-            predictedY = ballPos.y + ballVel.y * anticipate;
+            if (enableSpinCompensation)
+            {
+                try
+                {
+                    // Use spin-aware prediction
+                    predictedY = PredictPositionWithSpin(ballPos, ballVel, _ball.GetComponent<Rigidbody2D>());
+                    
+                    // Fallback to linear prediction if spin prediction gives extreme values
+                    if (float.IsNaN(predictedY) || float.IsInfinity(predictedY))
+                    {
+                        predictedY = ballPos.y + ballVel.y * anticipate;
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // Fallback to simple linear prediction if anything goes wrong
+                    predictedY = ballPos.y + ballVel.y * anticipate;
+                }
+            }
+            else
+            {
+                // Simple linear prediction (original behavior)
+                predictedY = ballPos.y + ballVel.y * anticipate;
+            }
         }
 
         float halfHeight = _cam.orthographicSize;
         float clampY = halfHeight - _paddle.localScale.y * 0.5f;
         _targetY = Mathf.Clamp(predictedY, -clampY, clampY);
         
+        // Calculate horizontal target position based on ball speed and position
+        if (enableHorizontalMovement)
+        {
+            float ballSpeed = ballVel.magnitude;
+            float distanceFromCenter = Mathf.Abs(_paddle.position.x);
+            
+            // Aggressive stance when ball is slow and approaching
+            if (ballApproaching && ballSpeed < aggressiveThreshold)
+            {
+                _targetX = Mathf.Sign(_paddle.position.x) * minDistanceFromNet;
+            }
+            // Defensive stance when ball is fast
+            else if (ballSpeed > defensiveThreshold)
+            {
+                _targetX = Mathf.Sign(_paddle.position.x) * maxDistanceFromNet;
+            }
+            // Normal positioning based on ball Y position (move closer when ball is near paddle)
+            else if (ballApproaching)
+            {
+                float ballDistanceFromPaddle = Mathf.Abs(ballPos.y - _paddle.position.y);
+                float normalizedDistance = Mathf.Clamp01(ballDistanceFromPaddle / halfHeight);
+                float desiredDistance = Mathf.Lerp(minDistanceFromNet, maxDistanceFromNet, normalizedDistance * 0.5f + 0.5f);
+                _targetX = Mathf.Sign(_paddle.position.x) * desiredDistance;
+            }
+            // Default position when ball is moving away
+            else
+            {
+                float defaultDistance = (minDistanceFromNet + maxDistanceFromNet) * 0.5f;
+                _targetX = Mathf.Sign(_paddle.position.x) * defaultDistance;
+            }
+        }
+        else
+        {
+            _targetX = _paddle.position.x; // No horizontal movement
+        }
+        
         // Apply smoothing to avoid jittery movements
-        if (_smoothedTargetY == 0) // initialize if not set
+        if (!_initialized) // initialize if not set
         {
             _smoothedTargetY = _targetY;
+            _smoothedTargetX = _targetX;
+            _initialized = true;
         }
         else
         {
             _smoothedTargetY = Mathf.Lerp(_smoothedTargetY, _targetY, smoothingFactor);
+            _smoothedTargetX = Mathf.Lerp(_smoothedTargetX, _targetX, smoothingFactor);
+        }
+        
+        // Store prediction for debug visualization
+        if (showDebugPrediction && _paddle != null)
+        {
+            _debugPredictionY = predictedY;
+            _debugBallPos = ballPos;
+            _debugTargetX = _targetX;
+        }
+        
+        // Debug logging (disable in production)
+        if (enableSpinCompensation && shouldReact && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"AI: Ball pos: {ballPos.y:F2}, Predicted: {predictedY:F2}, Ball vel: {ballVel.y:F2}, Spin: {_ball.GetComponent<Rigidbody2D>()?.angularVelocity ?? 0:F1}");
         }
         
         _hasTargets = true;
+    }
+
+    private float _debugPredictionY;
+    private Vector2 _debugBallPos;
+    private float _debugTargetX;
+
+    private void OnDrawGizmos()
+    {
+        if (showDebugPrediction && _paddle != null && _ball != null)
+        {
+            Gizmos.color = Color.yellow;
+            Vector3 predictionPoint = new Vector3(_paddle.position.x, _debugPredictionY, 0);
+            Gizmos.DrawLine(_debugBallPos, predictionPoint);
+            Gizmos.DrawSphere(predictionPoint, 0.1f);
+            
+            // Draw current ball position
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(_debugBallPos, 0.05f);
+            
+            // Draw horizontal target position
+            if (enableHorizontalMovement)
+            {
+                Gizmos.color = Color.blue;
+                Vector3 horizontalTarget = new Vector3(_debugTargetX, _paddle.position.y, 0);
+                Gizmos.DrawLine(_paddle.position, horizontalTarget);
+                Gizmos.DrawSphere(horizontalTarget, 0.08f);
+            }
+        }
     }
 
     private void FixedUpdate()
     {
         if (!_hasTargets || _paddle == null) return;
         float currentY = _paddle.position.y;
-        float delta = _smoothedTargetY - currentY; // Use smoothed target
-        if (Mathf.Abs(delta) < deadZone) return;
+        float currentX = _paddle.position.x;
+        
+        // Vertical movement
+        float deltaY = _smoothedTargetY - currentY;
+        float verticalStep = moveSpeed * Time.fixedDeltaTime;
+        float newY = Mathf.MoveTowards(currentY, _smoothedTargetY, verticalStep);
+        
+        // Horizontal movement
+        float newX = currentX;
+        if (enableHorizontalMovement)
+        {
+            float deltaX = _smoothedTargetX - currentX;
+            float horizontalStep = horizontalMoveSpeed * Time.fixedDeltaTime;
+            newX = Mathf.MoveTowards(currentX, _smoothedTargetX, horizontalStep);
+        }
+        
+        // Skip if both movements are within dead zones
+        if (Mathf.Abs(deltaY) < deadZone && Mathf.Abs(newX - currentX) < 0.01f) return;
 
-        float step = moveSpeed * Time.fixedDeltaTime;
-        float newY = Mathf.MoveTowards(currentY, _smoothedTargetY, step); // Use smoothed target
         var rb2d = _paddle.GetComponent<Rigidbody2D>();
         if (rb2d != null)
         {
             float vy = (newY - rb2d.position.y) / Mathf.Max(Time.fixedDeltaTime, 1e-5f);
-            rb2d.linearVelocity = new Vector2(0f, vy); // expose paddle velocity to collisions
-            rb2d.MovePosition(new Vector2(rb2d.position.x, newY));
+            float vx = (newX - rb2d.position.x) / Mathf.Max(Time.fixedDeltaTime, 1e-5f);
+            rb2d.linearVelocity = new Vector2(vx, vy); // expose paddle velocity to collisions
+            rb2d.MovePosition(new Vector2(newX, newY));
         }
         else
         {
-            _paddle.position = new Vector3(_paddle.position.x, newY, _paddle.position.z);
+            _paddle.position = new Vector3(newX, newY, _paddle.position.z);
         }
     }
 }
