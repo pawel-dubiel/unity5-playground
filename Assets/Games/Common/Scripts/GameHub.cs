@@ -21,9 +21,14 @@ public class GameHub : MonoBehaviour
         if (_selected) return;
 #if ENABLE_INPUT_SYSTEM
         var kb = Keyboard.current;
-        if (kb != null && kb.digit1Key.wasPressedThisFrame) SelectPong();
+        if (kb != null)
+        {
+            if (kb.digit1Key.wasPressedThisFrame) SelectPong();
+            if (kb.digit2Key.wasPressedThisFrame) SelectHex();
+        }
 #else
         if (Input.GetKeyDown(KeyCode.Alpha1)) SelectPong();
+        if (Input.GetKeyDown(KeyCode.Alpha2)) SelectHex();
 #endif
     }
 
@@ -31,6 +36,12 @@ public class GameHub : MonoBehaviour
     {
         _selected = true;
         PongBootstrap.Start();
+    }
+
+    private void SelectHex()
+    {
+        _selected = true;
+        HexBootstrap.Start();
     }
 
     private void OnGUI()
@@ -53,11 +64,10 @@ public class GameHub : MonoBehaviour
         if (GUILayout.Button("1) Pong", GUILayout.Height(36)))
             SelectPong();
         GUILayout.Space(10);
-        GUI.enabled = false;
-        GUILayout.Button("2) Coming Soon", GUILayout.Height(36));
-        GUI.enabled = true;
+        if (GUILayout.Button("2) Hex TBS", GUILayout.Height(36)))
+            SelectHex();
         GUILayout.Space(8);
-        GUILayout.Label("Press 1 to start Pong", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter });
+        GUILayout.Label("Press 1 for Pong • 2 for Hex", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter });
         GUILayout.EndArea();
     }
 }
