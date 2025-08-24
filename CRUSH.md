@@ -28,4 +28,10 @@
 - Prefabs: In Assets/Resources/Pong/
 - Input: Use Input System with InputActionAsset
 
+## Important Unity Guidelines
+- NEVER modify .meta files directly - Unity manages these automatically
+- Always commit .meta files to version control when assets are added/renamed/moved
+- If .meta files become corrupted, delete them and let Unity regenerate them
+- Use Unity Editor for all asset operations to ensure proper .meta file synchronization
+
 (Note: No Cursor/Copilot rules found; extend as needed)
