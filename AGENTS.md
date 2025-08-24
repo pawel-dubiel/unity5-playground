@@ -13,12 +13,17 @@
 - 2D Setup: prefer `SpriteRenderer`, `Rigidbody2D`, `BoxCollider2D/CircleCollider2D`, and `PhysicsMaterial2D` for gameplay.
 - Input: use the Input System (`Keyboard.current`) or an `InputActionAsset` for bindings; avoid direct `Find` and wire references via `[SerializeField]`.
 - Editor Utilities: use `Assets/Editor/` for one-click prefab/build helpers (e.g., `Pong > Build Prefabs (2D)`).
+ - Example layout: `Assets/Games/Pong/` with scripts like `Ball2D.cs`, `PaddleAI.cs` for orientation.
 
 ## Build, Test, and Development Commands
 - Open locally: use Unity Hub (Add project) or CLI: `/Applications/Unity/Hub/Editor/<version>/Unity -projectPath .`.
 - Build (Editor): File → Build Settings → select target → Build.
 - Build (CLI example): `/Applications/Unity/Hub/Editor/<version>/Unity -batchmode -quit -projectPath . -executeMethod BuildScript.Build -logFile build.log` (expects `Assets/Editor/BuildScript.cs` with a static `Build()` method).
 - Test (CLI): `/Applications/Unity/Hub/Editor/<version>/Unity -batchmode -quit -projectPath . -runTests -testPlatform editmode -testResults TestResults.xml -logFile`.
+ - Build (CLI alternative): `/Applications/Unity/Hub/Editor/<version>/Unity -batchmode -quit -projectPath . -buildTarget <platform> -logFile build.log`.
+ - Test filter (CLI): add `-testFilter <TestName>` to target a single test.
+ - Lint/format: prefer IDE analyzers (Roslyn); optionally run `dotnet format` against `Assembly-CSharp.csproj`.
+ - Version example (macOS): `/Applications/Unity/Hub/Editor/2022.3.20f1/Unity.app/Contents/MacOS/Unity -projectPath .`.
 
 ## Coding Style & Naming Conventions
 - C# with 4-space indents, UTF-8, LF endings.
@@ -26,6 +31,12 @@
 - Unity specifics: serialize with `[SerializeField] private Type _field;` and prefer `RequireComponent` where applicable.
 - Formatting: use your IDE’s formatter; optional: `dotnet format Assembly-CSharp.csproj`.
 - Assets: Prefabs PascalCase, materials suffixed `Mat`, textures suffixed `Tex`.
+ - Imports: order alphabetically; group Unity, then System, then others; avoid `using` directives inside methods.
+ - Braces/spacing: braces on new line; include spaces around operators for readability.
+ - Typing: prefer explicit types; use `var` only when the type is obvious.
+ - Error handling: wrap external API calls with try/catch; log with `Debug.LogError`; avoid swallowing exceptions.
+ - Comments/docs: use XML docs for public APIs; avoid redundant comments.
+ - File layout: one class per file; keep scripts under `Assets/Scripts/` or organized subfolders.
 
 ## Testing Guidelines
 - Framework: Unity Test Framework (EditMode/PlayMode).
@@ -41,3 +52,5 @@
 ## Security & Configuration Tips
 - In Unity: Version Control = Visible Meta Files; Asset Serialization = Force Text.
 - Always commit `.meta` files; avoid moving assets without committing associated `.meta` changes.
+ - Never edit `.meta` files manually; perform asset operations via the Unity Editor to keep `.meta` in sync.
+ - If `.meta` files are corrupted or missing, let Unity regenerate them (then commit the updated files).
