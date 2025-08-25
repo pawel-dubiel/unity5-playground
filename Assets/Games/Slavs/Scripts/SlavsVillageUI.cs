@@ -31,6 +31,8 @@ public class SlavsVillageUI : MonoBehaviour
     private Button _eventBtn2;
     private Button _eventBtn3;
     private Button _eventContinue;
+    private GameObject _eventResultPanel;
+    private Text _eventResultText;
     private SlavsCard3D _card3D;
     private GameObject _transitionRoot;
     private Text _transitionText;
@@ -77,8 +79,11 @@ public class SlavsVillageUI : MonoBehaviour
             }
             else if (_game.IsEventResultScreen)
             {
-                // allow Enter to skip to transition
+                // allow Enter or mouse click to skip to transition
                 if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
+                    _game.EndEvent();
+                var mouse = Mouse.current;
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
                     _game.EndEvent();
             }
             else if (!_game.IsResultScreen)
@@ -99,7 +104,7 @@ public class SlavsVillageUI : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.Alpha2)) _game.EventChoose(2);
             if (Input.GetKeyDown(KeyCode.Alpha3)) _game.EventChoose(3);
         }
-        else if (_game.IsEventResultScreen && Input.GetKeyDown(KeyCode.Return))
+        else if (_game.IsEventResultScreen && (Input.GetKeyDown(KeyCode.Return) || Input.GetMouseButtonDown(0)))
         {
             _game.EndEvent();
         }
@@ -220,11 +225,13 @@ public class SlavsVillageUI : MonoBehaviour
     {
         if (_eventRoot == null) return;
         var ev = _game.CurrentEvent;
-        EnsureCard3D();
-        if (_eventImage != null) _eventImage.texture = _card3D.Texture;
+        if (ev != null && _eventImage != null)
+        {
+            var tex = ev.GetImageTexture();
+            _eventImage.texture = tex;
+        }
         if (ev != null)
         {
-            _card3D.SetTint(ev.ImageTint);
             SetOptionLabel(_eventBtn1, 0);
             SetOptionLabel(_eventBtn2, 1);
             SetOptionLabel(_eventBtn3, 2);
@@ -240,6 +247,7 @@ public class SlavsVillageUI : MonoBehaviour
         _eventBtn1.gameObject.SetActive(true);
         _eventBtn2.gameObject.SetActive(true);
         _eventBtn3.gameObject.SetActive(true);
+        if (_eventResultPanel != null) _eventResultPanel.SetActive(false);
     }
 
     private void ShowEventResult()
@@ -253,6 +261,11 @@ public class SlavsVillageUI : MonoBehaviour
         if (_eventBtn2 != null) _eventBtn2.gameObject.SetActive(false);
         if (_eventBtn3 != null) _eventBtn3.gameObject.SetActive(false);
         if (_eventContinue != null) _eventContinue.gameObject.SetActive(false);
+        if (_eventResultPanel != null && _eventResultText != null)
+        {
+            _eventResultText.text = _game.GetEventResultText() + "\n\n" + _game.GetEventDeltaSummary() + "\n\n(click to continue)";
+            _eventResultPanel.SetActive(true);
+        }
         if (!_scheduledEventAdvance)
         {
             StartAutoAdvance(() => _game.EndEvent());
@@ -474,6 +487,17 @@ public class SlavsVillageUI : MonoBehaviour
         _eventBtn3 = CreateButton(bottomBar.transform, "", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(16f, 24f), new Vector2(-16f, 60f));
         _eventContinue = CreateButton(bottomBar.transform, "Continue", new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-160f, 24f), new Vector2(-16f, 60f));
         _eventRoot.SetActive(false);
+
+        // Event result floating panel (centered)
+        _eventResultPanel = CreatePanel(
+            _eventRoot.transform,
+            new Vector2(0.2f, 0.25f), new Vector2(0.8f, 0.75f),
+            new Vector2(0f, 0f), new Vector2(0f, 0f)
+        );
+        var resBg = _eventResultPanel.GetComponent<Image>();
+        if (resBg != null) resBg.color = new Color(0f, 0f, 0f, 0.55f);
+        _eventResultText = CreateText(_eventResultPanel.transform, "", 18, TextAnchor.MiddleCenter, new RectOffset(20, 20, 20, 20));
+        _eventResultPanel.SetActive(false);
 
         // Transition overlay (poetic season text)
         _transitionRoot = CreatePanel(

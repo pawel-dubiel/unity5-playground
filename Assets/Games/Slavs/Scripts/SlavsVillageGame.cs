@@ -27,8 +27,11 @@ public class SlavsVillageGame : MonoBehaviour
     [SerializeField] private int _luck = 0;            // -10..+10 influences season mood
 
     private bool _initialized;
-    private SlavsEvent _currentEvent;
-    private readonly System.Collections.Generic.Queue<SlavsEvent> _deck = new System.Collections.Generic.Queue<SlavsEvent>();
+    private SlavsEventBase _currentEvent;
+    private SlavsEventBase _pendingEvent;
+    private readonly System.Collections.Generic.List<SlavsEventBase> _scheduled = new System.Collections.Generic.List<SlavsEventBase>();
+    private readonly System.Collections.Generic.List<SlavsEventBase> _catalog = new System.Collections.Generic.List<SlavsEventBase>();
+    private int _turnIndex;
     private string _eventDeltaSummary;
 
     public int Population => _population;
@@ -42,7 +45,8 @@ public class SlavsVillageGame : MonoBehaviour
     public bool IsEventScreen => _screen == GameScreen.Event;
     public bool IsEventResultScreen => _screen == GameScreen.EventResult;
     public bool IsTransitionScreen => _screen == GameScreen.Transition;
-    public SlavsEvent CurrentEvent => _currentEvent;
+    public SlavsEventBase CurrentEvent => _currentEvent;
+    public int TurnIndex => _turnIndex;
     public string TransitionText => _transitionText;
     public string GetEventDeltaSummary() => _eventDeltaSummary;
 
@@ -89,59 +93,51 @@ public class SlavsVillageGame : MonoBehaviour
     private void EnsureInit()
     {
         if (_initialized) return;
-        BuildInitialDeck();
+        BuildCatalog();
         NextTurn();
         _initialized = true;
     }
 
-    private void BuildInitialDeck()
+    private void BuildCatalog()
     {
-        var e = new SlavsEvent
-        {
-            Id = "spring_wiec_01",
-            Title = "Stranger at the Palisade",
-            Body = "A trader stops at our gate, asking leave to enter. He bears salt and fine knives. He asks for grain and honey.",
-            ImageTint = new Color(0.35f, 0.30f, 0.22f, 1f),
-            AutoAdvance = true
-        };
-
-        e.Options.Add(new SlavsEventOption
-        {
-            Label = "Let him in; barter fairly",
-            ResultText = "Salt and knives change hands; our folk are pleased.",
-            Apply = g => { g._foodStores -= 12; g._prestige += 1; g._luck += 1; }
-        });
-        e.Options.Add(new SlavsEventOption
-        {
-            Label = "Demand a toll at the gate",
-            ResultText = "He pays grudgingly. The village gains, but tongues wag.",
-            Apply = g => { g._foodStores += 6; g._prestige -= 1; g._luck -= 1; }
-        });
-        e.Options.Add(new SlavsEventOption
-        {
-            Label = "Turn him away; keep watch",
-            ResultText = "No trouble comes, but some say we might have profited.",
-            Apply = g => { g._prestige += 0; }
-        });
-
-        _deck.Enqueue(e);
+        _catalog.Clear();
+        _catalog.Add(new TraderAtGateEvent());
     }
 
     private void NextTurn()
     {
-        if (_deck.Count == 0)
+        _turnIndex++;
+        _season = GetNextSeasonName();
+        _pendingEvent = null;
+        // Check scheduled continuations first
+        for (int i = _scheduled.Count - 1; i >= 0; i--)
         {
-            // Simple year progression placeholder
-            _season = _season == "Early Spring" ? "Late Spring" : "Early Spring";
-            BuildInitialDeck();
+            if (_scheduled[i].NextStageTurn <= _turnIndex)
+            {
+                _pendingEvent = _scheduled[i];
+                _scheduled.RemoveAt(i);
+                _pendingEvent.OnContinue(this);
+                break;
+            }
         }
-        _currentEvent = _deck.Dequeue();
+        // Otherwise pick by triggers
+        if (_pendingEvent == null)
+        {
+            var snap = new SlavsGameSnapshot(_turnIndex, _season, _population, _warriors, _foodStores, _livestock, _prestige, _faith, _luck);
+            foreach (var ev in _catalog)
+            {
+                if (ev.CanTrigger(snap)) { _pendingEvent = ev; break; }
+            }
+        }
     }
 
     private bool TryTriggerEvent()
     {
-        // For now, always trigger the current queued event after planning
-        return _currentEvent != null;
+        if (_pendingEvent == null) return false;
+        _currentEvent = _pendingEvent;
+        _currentEvent.OnBegin(this);
+        _pendingEvent = null;
+        return true;
     }
 
     public void EventChoose(int option)
@@ -150,9 +146,12 @@ public class SlavsVillageGame : MonoBehaviour
         // Snapshot before
         var p0 = _population; var w0 = _warriors; var f0 = _foodStores; var l0 = _livestock; var pr0 = _prestige; var fa0 = _faith; var luck0 = _luck;
         _lastEventChoice = option;
-        var idx = Mathf.Clamp(option - 1, 0, _currentEvent.Options.Count - 1);
-        var opt = _currentEvent.Options[idx];
-        opt.Apply?.Invoke(this);
+        _currentEvent.OnChoose(option - 1, this, out _eventResultText, out var afterTurns);
+        if (afterTurns > 0)
+        {
+            _currentEvent.ScheduleContinuation(_turnIndex + afterTurns);
+            _scheduled.Add(_currentEvent);
+        }
         // Compose delta summary
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         void AddDelta(string name, int before, int after)
@@ -195,12 +194,8 @@ public class SlavsVillageGame : MonoBehaviour
         }
     }
 
-    public string GetEventResultText()
-    {
-        if (_currentEvent == null) return "";
-        var idx = Mathf.Clamp(_lastEventChoice - 1, 0, _currentEvent.Options.Count - 1);
-        return _currentEvent.Options[idx].ResultText;
-    }
+    private string _eventResultText;
+    public string GetEventResultText() => _eventResultText ?? string.Empty;
 
     // --- Season transition handling ---
     private string _transitionText;
@@ -220,6 +215,11 @@ public class SlavsVillageGame : MonoBehaviour
         NextTurn();
         _screen = GameScreen.SpringPlanning;
     }
+
+    // Convenience mutators for events
+    public void ModifyFood(int delta) { _foodStores += delta; }
+    public void ModifyPrestige(int delta) { _prestige += delta; }
+    public void ModifyLuck(int delta) { _luck += delta; }
 
     public string GetNextSeasonName()
     {
