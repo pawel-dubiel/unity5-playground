@@ -54,3 +54,17 @@
 - Always commit `.meta` files; avoid moving assets without committing associated `.meta` changes.
  - Never edit `.meta` files manually; perform asset operations via the Unity Editor to keep `.meta` in sync.
  - If `.meta` files are corrupted or missing, let Unity regenerate them (then commit the updated files).
+
+## Avoid Deprecated APIs
+- Prefer current Unity APIs and packages; avoid obsolete members flagged by the compiler or docs.
+- Input System:
+  - Do not use legacy `UnityEngine.Input` when Player Settings → Active Input Handling is set to Input System.
+  - Use `UnityEngine.InputSystem` (e.g., `Keyboard.current`) and `InputSystemUIInputModule` for UGUI.
+- Finding objects:
+  - Avoid `Object.FindObjectOfType<T>()` (deprecated). Use `Object.FindFirstObjectByType<T>()` (2022.2+) or `FindAnyObjectByType<T>()` when appropriate; prefer serialized references.
+- UI fonts:
+  - `Resources.GetBuiltinResource<Font>("Arial.ttf")` is deprecated. Use `LegacyRuntime.ttf` or provide a project font via TMP/UGUI.
+- EventSystem:
+  - For UGUI, prefer `InputSystemUIInputModule` (with new Input System) instead of `StandaloneInputModule`.
+- General:
+  - Heed CS0618 warnings and update code; avoid relying on deprecated packages or methods.

@@ -25,10 +25,12 @@ public class GameHub : MonoBehaviour
         {
             if (kb.digit1Key.wasPressedThisFrame) SelectPong();
             if (kb.digit2Key.wasPressedThisFrame) SelectHex();
+            if (kb.digit3Key.wasPressedThisFrame) SelectSlavs();
         }
 #else
         if (Input.GetKeyDown(KeyCode.Alpha1)) SelectPong();
         if (Input.GetKeyDown(KeyCode.Alpha2)) SelectHex();
+        if (Input.GetKeyDown(KeyCode.Alpha3)) SelectSlavs();
 #endif
     }
 
@@ -44,10 +46,16 @@ public class GameHub : MonoBehaviour
         HexBootstrap.Start();
     }
 
+    private void SelectSlavs()
+    {
+        _selected = true;
+        SlavsBootstrap.Start();
+    }
+
     private void OnGUI()
     {
         if (_selected) return;
-        var w = 420f; var h = 200f;
+        var w = 420f; var h = 260f;
         var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
         GUI.Box(rect, "");
 
@@ -66,8 +74,11 @@ public class GameHub : MonoBehaviour
         GUILayout.Space(10);
         if (GUILayout.Button("2) Hex TBS", GUILayout.Height(36)))
             SelectHex();
+        GUILayout.Space(10);
+        if (GUILayout.Button("3) Slavic Village (Poland)", GUILayout.Height(36)))
+            SelectSlavs();
         GUILayout.Space(8);
-        GUILayout.Label("Press 1 for Pong • 2 for Hex", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter });
+        GUILayout.Label("Press 1 Pong • 2 Hex • 3 Slavs Village", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter });
         GUILayout.EndArea();
     }
 }
